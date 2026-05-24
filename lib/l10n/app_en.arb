@@ -1,0 +1,29 @@
+{
+  "@@locale": "en",
+  "appTitle": "Scheduled Job",
+  "newScheduledJobButton": "New Scheduled Job",
+  "newScheduledJobTitle": "New Scheduled Job",
+  "afterMinutes": "After minutes",
+  "atTime": "At time",
+  "minutesFromNow": "Minutes from now",
+  "selectDateAndTime": "Select date and time",
+  "description": "Description",
+  "save": "Save",
+  "cancel": "Cancel",
+  "descriptionRequired": "Description is required",
+  "positiveMinutesRequired": "Enter a positive number of minutes",
+  "dateTimeRequired": "Select a date and time",
+  "dailyBackup": "Daily backup",
+  "dataCleanup": "Data cleanup",
+  "reportExport": "Report export",
+  "healthCheck": "Health check",
+  "notificationSync": "Notification sync",
+  "afterMinutesLabel": "After {minutes} minutes",
+  "@afterMinutesLabel": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  }
+}

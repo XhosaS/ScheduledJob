@@ -1,0 +1,29 @@
+{
+  "@@locale": "zh",
+  "appTitle": "计划任务",
+  "newScheduledJobButton": "新建计划任务",
+  "newScheduledJobTitle": "新建计划任务",
+  "afterMinutes": "分钟后",
+  "atTime": "指定时间",
+  "minutesFromNow": "从现在起的分钟数",
+  "selectDateAndTime": "选择日期和时间",
+  "description": "描述",
+  "save": "保存",
+  "cancel": "取消",
+  "descriptionRequired": "请输入描述",
+  "positiveMinutesRequired": "请输入大于 0 的分钟数",
+  "dateTimeRequired": "请选择日期和时间",
+  "dailyBackup": "每日备份",
+  "dataCleanup": "数据清理",
+  "reportExport": "报表导出",
+  "healthCheck": "健康检查",
+  "notificationSync": "通知同步",
+  "afterMinutesLabel": "{minutes} 分钟后",
+  "@afterMinutesLabel": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  }
+}
