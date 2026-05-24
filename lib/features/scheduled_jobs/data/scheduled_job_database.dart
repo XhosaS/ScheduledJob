@@ -27,7 +27,7 @@ class ScheduledJobDatabase {
     return _database = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onCreate: (db, version) async {
           await _createSchema(db);
         },
@@ -38,6 +38,11 @@ class ScheduledJobDatabase {
             );
             await db.execute(
               "ALTER TABLE $tableName ADD COLUMN command TEXT NOT NULL DEFAULT ''",
+            );
+          }
+          if (oldVersion < 3) {
+            await db.execute(
+              'ALTER TABLE $tableName ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 0',
             );
           }
         },
@@ -55,6 +60,7 @@ class ScheduledJobDatabase {
     required String description,
     required JobRunMode runMode,
     required String command,
+    bool isEnabled = false,
   }) async {
     final db = await database;
     final id = await db.insert(tableName, {
@@ -62,6 +68,7 @@ class ScheduledJobDatabase {
       'description': description,
       'run_mode': runMode.storageValue,
       'command': command,
+      'is_enabled': isEnabled ? 1 : 0,
     });
 
     return ScheduledJob(
@@ -70,6 +77,7 @@ class ScheduledJobDatabase {
       description: description,
       runMode: runMode,
       command: command,
+      isEnabled: isEnabled,
     );
   }
 
@@ -79,6 +87,7 @@ class ScheduledJobDatabase {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required bool isEnabled,
   }) async {
     final db = await database;
     await db.update(
@@ -88,6 +97,7 @@ class ScheduledJobDatabase {
         'description': description,
         'run_mode': runMode.storageValue,
         'command': command,
+        'is_enabled': isEnabled ? 1 : 0,
       },
       where: 'id = ?',
       whereArgs: [id],
@@ -99,7 +109,30 @@ class ScheduledJobDatabase {
       description: description,
       runMode: runMode,
       command: command,
+      isEnabled: isEnabled,
     );
+  }
+
+  Future<void> setJobEnabled({
+    required int id,
+    required bool isEnabled,
+    required DateTime scheduledAt,
+  }) async {
+    final db = await database;
+    await db.update(
+      tableName,
+      {
+        'is_enabled': isEnabled ? 1 : 0,
+        'scheduled_at': scheduledAt.millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> deleteJob(int id) async {
+    final db = await database;
+    await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<List<ScheduledJob>> fetchJobs() async {
@@ -117,6 +150,7 @@ class ScheduledJobDatabase {
       description: row['description']! as String,
       runMode: JobRunMode.fromStorageValue(row['run_mode']! as String),
       command: row['command']! as String,
+      isEnabled: (row['is_enabled']! as int) == 1,
     );
   }
 
@@ -127,7 +161,8 @@ CREATE TABLE $tableName (
   scheduled_at INTEGER NOT NULL,
   description TEXT NOT NULL,
   run_mode TEXT NOT NULL,
-  command TEXT NOT NULL
+  command TEXT NOT NULL,
+  is_enabled INTEGER NOT NULL DEFAULT 0
 )
 ''');
   }

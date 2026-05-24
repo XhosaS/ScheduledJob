@@ -9,6 +9,8 @@ class JobListPane extends StatelessWidget {
     required this.selectedJobId,
     required this.onNewJob,
     required this.onJobSelected,
+    required this.onEnabledChanged,
+    required this.onDeleteJob,
     super.key,
   });
 
@@ -17,6 +19,8 @@ class JobListPane extends StatelessWidget {
   final int? selectedJobId;
   final VoidCallback onNewJob;
   final ValueChanged<ScheduledJob> onJobSelected;
+  final void Function(ScheduledJob job, bool isEnabled) onEnabledChanged;
+  final ValueChanged<ScheduledJob> onDeleteJob;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +28,7 @@ class JobListPane extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return SizedBox(
-      width: 320,
+      width: 360,
       child: Material(
         color: colorScheme.surfaceContainerLow,
         child: Column(
@@ -45,7 +49,7 @@ class JobListPane extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                '任务列表',
+                'Jobs',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -63,83 +67,13 @@ class JobListPane extends StatelessWidget {
                           const SizedBox(height: 4),
                       itemBuilder: (context, index) {
                         final job = jobs[index];
-                        final isSelected = job.id == selectedJobId;
-                        return Material(
-                          color: isSelected
-                              ? colorScheme.secondaryContainer
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(16),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () => onJobSelected(job),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? colorScheme.onSecondaryContainer
-                                                .withValues(alpha: 0.12)
-                                          : colorScheme.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      Icons.schedule,
-                                      color: isSelected
-                                          ? colorScheme.onSecondaryContainer
-                                          : colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          job.description,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleSmall
-                                              ?.copyWith(
-                                                color: isSelected
-                                                    ? colorScheme
-                                                          .onSecondaryContainer
-                                                    : colorScheme.onSurface,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          _formatDateTime(job.scheduledAt),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: isSelected
-                                                    ? colorScheme
-                                                          .onSecondaryContainer
-                                                    : colorScheme
-                                                          .onSurfaceVariant,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        _RunModeLabel(job.runMode),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                        return _JobListItem(
+                          job: job,
+                          isSelected: job.id == selectedJobId,
+                          onSelected: () => onJobSelected(job),
+                          onEnabledChanged: (isEnabled) =>
+                              onEnabledChanged(job, isEnabled),
+                          onDelete: () => onDeleteJob(job),
                         );
                       },
                     ),
@@ -149,15 +83,171 @@ class JobListPane extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _formatDateTime(DateTime value) {
-    return '${value.year.toString().padLeft(4, '0')}-'
+class _JobListItem extends StatelessWidget {
+  const _JobListItem({
+    required this.job,
+    required this.isSelected,
+    required this.onSelected,
+    required this.onEnabledChanged,
+    required this.onDelete,
+  });
+
+  final ScheduledJob job;
+  final bool isSelected;
+  final VoidCallback onSelected;
+  final ValueChanged<bool> onEnabledChanged;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return GestureDetector(
+      onSecondaryTapDown: (details) =>
+          _showContextMenu(context, details.globalPosition),
+      onLongPressStart: (details) =>
+          _showContextMenu(context, details.globalPosition),
+      child: Material(
+        color: isSelected ? colorScheme.secondaryContainer : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(16),
+                ),
+                onTap: onSelected,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? colorScheme.onSecondaryContainer.withValues(
+                                  alpha: 0.12,
+                                )
+                              : colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.schedule,
+                          color: isSelected
+                              ? colorScheme.onSecondaryContainer
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              job.description,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    color: isSelected
+                                        ? colorScheme.onSecondaryContainer
+                                        : colorScheme.onSurface,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              _formatTime(job.scheduledAt),
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    color: isSelected
+                                        ? colorScheme.onSecondaryContainer
+                                        : colorScheme.onSurface,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatNextDate(job.scheduledAt),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: isSelected
+                                        ? colorScheme.onSecondaryContainer
+                                        : colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            _RunModeLabel(job.runMode),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Switch(
+                key: Key('jobEnabledSwitch-${job.id}'),
+                value: job.isEnabled,
+                onChanged: onEnabledChanged,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showContextMenu(BuildContext context, Offset position) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final selected = await showMenu<_JobContextAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: _JobContextAction.delete,
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline),
+              SizedBox(width: 8),
+              Text('Delete'),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (selected == _JobContextAction.delete) {
+      onDelete();
+    }
+  }
+
+  String _formatTime(DateTime value) {
+    return '${value.hour.toString().padLeft(2, '0')}:'
+        '${value.minute.toString().padLeft(2, '0')}:'
+        '${value.second.toString().padLeft(2, '0')}';
+  }
+
+  String _formatNextDate(DateTime value) {
+    return 'Next ${value.year.toString().padLeft(4, '0')}-'
         '${value.month.toString().padLeft(2, '0')}-'
-        '${value.day.toString().padLeft(2, '0')} '
-        '${value.hour.toString().padLeft(2, '0')}:'
-        '${value.minute.toString().padLeft(2, '0')}';
+        '${value.day.toString().padLeft(2, '0')}';
   }
 }
+
+enum _JobContextAction { delete }
 
 class _RunModeLabel extends StatelessWidget {
   const _RunModeLabel(this.runMode);
@@ -227,7 +317,7 @@ class _EmptyJobList extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              '暂无计划任务',
+              'No scheduled jobs',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),

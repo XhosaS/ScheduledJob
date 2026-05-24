@@ -12,6 +12,9 @@ class NewScheduledJobForm extends StatefulWidget {
 }
 
 class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
+  static const _shutdownCommand = 'Stop-Computer -Force';
+  static const _shutdownDescription = 'Shutdown this computer';
+
   final TextEditingController _minutesController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _commandController = TextEditingController();
@@ -76,7 +79,7 @@ class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
                 ),
                 ButtonSegment(
                   value: ScheduleMode.atTime,
-                  icon: const Icon(Icons.event_outlined),
+                  icon: const Icon(Icons.access_time),
                   label: Text(l10n.atTime),
                 ),
               ],
@@ -101,33 +104,12 @@ class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
                         errorText: viewModel.minutesError,
                       ),
                     )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          height: 56,
-                          child: OutlinedButton.icon(
-                            key: const Key('selectDateTimeButton'),
-                            onPressed: _selectDateTime,
-                            icon: const Icon(Icons.event_outlined),
-                            label: Text(
-                              viewModel.selectedDateTime == null
-                                  ? l10n.selectDateAndTime
-                                  : _formatDateTime(
-                                      viewModel.selectedDateTime!,
-                                    ),
-                            ),
-                          ),
-                        ),
-                        if (viewModel.timeError != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            viewModel.timeError!,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.error),
-                          ),
-                        ],
-                      ],
+                  : _ClockTimePicker(
+                      value: viewModel.selectedClockTime,
+                      errorText: viewModel.timeError,
+                      onChanged: context
+                          .read<ScheduledJobsViewModel>()
+                          .setSelectedClockTime,
                     ),
             ),
             const SizedBox(height: 20),
@@ -152,13 +134,18 @@ class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
               },
             ),
             const SizedBox(height: 20),
+            _RecommendedCommands(
+              title: l10n.recommendedCommands,
+              onShutdownSelected: _applyShutdownRecommendation,
+            ),
+            const SizedBox(height: 20),
             TextField(
               key: const Key('commandField'),
               controller: _commandController,
               minLines: 3,
               maxLines: 6,
               decoration: InputDecoration(
-                labelText: 'Command',
+                labelText: l10n.command,
                 alignLabelWithHint: true,
                 prefixIcon: const Padding(
                   padding: EdgeInsets.only(bottom: 40),
@@ -197,7 +184,7 @@ class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
                         descriptionRequired: l10n.descriptionRequired,
                         positiveMinutesRequired: l10n.positiveMinutesRequired,
                         dateTimeRequired: l10n.dateTimeRequired,
-                        commandRequired: 'Command is required',
+                        commandRequired: l10n.commandRequired,
                       ),
                     );
                   },
@@ -226,41 +213,6 @@ class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
     );
   }
 
-  Future<void> _selectDateTime() async {
-    final viewModel = context.read<ScheduledJobsViewModel>();
-    final now = DateTime.now();
-    final current = viewModel.selectedDateTime ?? now;
-    final date = await showDatePicker(
-      context: context,
-      initialDate: current,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 5),
-    );
-    if (date == null || !mounted) {
-      return;
-    }
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(current),
-    );
-    if (time == null || !mounted) {
-      return;
-    }
-
-    viewModel.setSelectedDateTime(
-      DateTime(date.year, date.month, date.day, time.hour, time.minute),
-    );
-  }
-
-  String _formatDateTime(DateTime value) {
-    return '${value.year.toString().padLeft(4, '0')}-'
-        '${value.month.toString().padLeft(2, '0')}-'
-        '${value.day.toString().padLeft(2, '0')} '
-        '${value.hour.toString().padLeft(2, '0')}:'
-        '${value.minute.toString().padLeft(2, '0')}';
-  }
-
   void _syncControllers(ScheduledJobsViewModel viewModel) {
     final selectedJob = viewModel.selectedJob;
     if (selectedJob == null) {
@@ -281,5 +233,183 @@ class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
     _minutesController.clear();
     _descriptionController.text = selectedJob.description;
     _commandController.text = selectedJob.command;
+  }
+
+  void _applyShutdownRecommendation() {
+    context.read<ScheduledJobsViewModel>().selectRunMode(JobRunMode.powershell);
+    _commandController.text = _shutdownCommand;
+    _descriptionController.text = _shutdownDescription;
+  }
+}
+
+class _RecommendedCommands extends StatelessWidget {
+  const _RecommendedCommands({
+    required this.title,
+    required this.onShutdownSelected,
+  });
+
+  final String title;
+  final VoidCallback onShutdownSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ActionChip(
+                  key: const Key('recommendedShutdownCommandChip'),
+                  avatar: const Icon(Icons.power_settings_new, size: 18),
+                  label: const Text('PowerShell shutdown'),
+                  onPressed: onShutdownSelected,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClockTimePicker extends StatelessWidget {
+  const _ClockTimePicker({
+    required this.value,
+    required this.onChanged,
+    this.errorText,
+  });
+
+  final ClockTime? value;
+  final ValueChanged<ClockTime> onChanged;
+  final String? errorText;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = value ?? const ClockTime(hour: 0, minute: 0, second: 0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          key: const Key('clockTimePicker'),
+          children: [
+            Expanded(
+              child: _TimePartDropdown(
+                key: const Key('hourDropdown'),
+                label: 'HH',
+                value: selected.hour,
+                max: 23,
+                onChanged: (hour) => onChanged(
+                  ClockTime(
+                    hour: hour,
+                    minute: selected.minute,
+                    second: selected.second,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _TimePartDropdown(
+                key: const Key('minuteDropdown'),
+                label: 'MM',
+                value: selected.minute,
+                max: 59,
+                onChanged: (minute) => onChanged(
+                  ClockTime(
+                    hour: selected.hour,
+                    minute: minute,
+                    second: selected.second,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _TimePartDropdown(
+                key: const Key('secondDropdown'),
+                label: 'SS',
+                value: selected.second,
+                max: 59,
+                onChanged: (second) => onChanged(
+                  ClockTime(
+                    hour: selected.hour,
+                    minute: selected.minute,
+                    second: second,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (errorText != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            errorText!,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colorScheme.error),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TimePartDropdown extends StatelessWidget {
+  const _TimePartDropdown({
+    required super.key,
+    required this.label,
+    required this.value,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int value;
+  final int max;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<int>(
+      initialValue: value,
+      decoration: InputDecoration(
+        labelText: label,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
+      items: [
+        for (var item = 0; item <= max; item++)
+          DropdownMenuItem(
+            value: item,
+            child: Text(item.toString().padLeft(2, '0')),
+          ),
+      ],
+      onChanged: (value) {
+        if (value != null) {
+          onChanged(value);
+        }
+      },
+    );
   }
 }

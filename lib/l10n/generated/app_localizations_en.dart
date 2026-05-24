@@ -33,6 +33,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get description => 'Description';
 
   @override
+  String get command => 'Command';
+
+  @override
+  String get recommendedCommands => 'Recommended commands';
+
+  @override
+  String get commandRequired => 'Command is required';
+
+  @override
   String get save => 'Save';
 
   @override

@@ -9,6 +9,7 @@ abstract class ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    bool isEnabled = false,
   });
 
   Future<ScheduledJob> updateJob({
@@ -17,7 +18,16 @@ abstract class ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required bool isEnabled,
   });
+
+  Future<void> setJobEnabled({
+    required int id,
+    required bool isEnabled,
+    required DateTime scheduledAt,
+  });
+
+  Future<void> deleteJob(int id);
 }
 
 class SqliteScheduledJobRepository implements ScheduledJobRepository {
@@ -36,12 +46,14 @@ class SqliteScheduledJobRepository implements ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    bool isEnabled = false,
   }) {
     return _database.insertJob(
       scheduledAt: scheduledAt,
       description: description,
       runMode: runMode,
       command: command,
+      isEnabled: isEnabled,
     );
   }
 
@@ -52,6 +64,7 @@ class SqliteScheduledJobRepository implements ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required bool isEnabled,
   }) {
     return _database.updateJob(
       id: id,
@@ -59,6 +72,25 @@ class SqliteScheduledJobRepository implements ScheduledJobRepository {
       description: description,
       runMode: runMode,
       command: command,
+      isEnabled: isEnabled,
     );
+  }
+
+  @override
+  Future<void> setJobEnabled({
+    required int id,
+    required bool isEnabled,
+    required DateTime scheduledAt,
+  }) {
+    return _database.setJobEnabled(
+      id: id,
+      isEnabled: isEnabled,
+      scheduledAt: scheduledAt,
+    );
+  }
+
+  @override
+  Future<void> deleteJob(int id) {
+    return _database.deleteJob(id);
   }
 }

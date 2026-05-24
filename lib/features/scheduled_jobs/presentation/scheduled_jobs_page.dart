@@ -38,6 +38,8 @@ class ScheduledJobsPage extends StatelessWidget {
                   selectedJobId: viewModel.selectedJob?.id,
                   onNewJob: viewModel.startCreating,
                   onJobSelected: viewModel.startEditing,
+                  onEnabledChanged: viewModel.setJobEnabled,
+                  onDeleteJob: viewModel.deleteJob,
                 ),
                 VerticalDivider(
                   width: 1,

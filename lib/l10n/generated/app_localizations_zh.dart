@@ -33,6 +33,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get description => '描述';
 
   @override
+  String get command => '命令';
+
+  @override
+  String get recommendedCommands => '推荐命令';
+
+  @override
+  String get commandRequired => '请输入命令';
+
+  @override
   String get save => '保存';
 
   @override

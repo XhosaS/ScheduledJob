@@ -1,21 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:scheduled_job/core/l10n/app_localizations_context.dart';
+import 'package:scheduled_job/features/scheduled_jobs/application/scheduled_job_scheduler.dart';
 import 'package:scheduled_job/features/scheduled_jobs/data/scheduled_job_repository.dart';
 import 'package:scheduled_job/features/scheduled_jobs/presentation/scheduled_jobs_page.dart';
 import 'package:scheduled_job/features/scheduled_jobs/presentation/scheduled_jobs_view_model.dart';
 import 'package:scheduled_job/l10n/generated/app_localizations.dart';
 
 class MyApp extends StatelessWidget {
-  const MyApp({required this.repository, super.key, this.locale});
+  const MyApp({
+    required this.repository,
+    super.key,
+    this.locale,
+    this.scheduler,
+  });
 
   final ScheduledJobRepository repository;
   final Locale? locale;
+  final ScheduledJobScheduler? scheduler;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ScheduledJobsViewModel(repository)..loadJobs(),
+      create: (_) =>
+          ScheduledJobsViewModel(repository, scheduler: scheduler)..loadJobs(),
       child: MaterialApp(
         locale: locale,
         supportedLocales: AppLocalizations.supportedLocales,

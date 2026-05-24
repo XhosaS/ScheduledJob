@@ -146,6 +146,24 @@ abstract class AppLocalizations {
   /// **'Description'**
   String get description;
 
+  /// No description provided for @command.
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get command;
+
+  /// No description provided for @recommendedCommands.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended commands'**
+  String get recommendedCommands;
+
+  /// No description provided for @commandRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Command is required'**
+  String get commandRequired;
+
   /// No description provided for @save.
   ///
   /// In en, this message translates to:

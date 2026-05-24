@@ -21,6 +21,7 @@ class ScheduledJob {
     required this.description,
     required this.runMode,
     required this.command,
+    required this.isEnabled,
   });
 
   final int id;
@@ -28,4 +29,23 @@ class ScheduledJob {
   final String description;
   final JobRunMode runMode;
   final String command;
+  final bool isEnabled;
+
+  ScheduledJob copyWith({
+    int? id,
+    DateTime? scheduledAt,
+    String? description,
+    JobRunMode? runMode,
+    String? command,
+    bool? isEnabled,
+  }) {
+    return ScheduledJob(
+      id: id ?? this.id,
+      scheduledAt: scheduledAt ?? this.scheduledAt,
+      description: description ?? this.description,
+      runMode: runMode ?? this.runMode,
+      command: command ?? this.command,
+      isEnabled: isEnabled ?? this.isEnabled,
+    );
+  }
 }
