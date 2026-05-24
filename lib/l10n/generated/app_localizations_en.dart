@@ -42,6 +42,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commandRequired => 'Command is required';
 
   @override
+  String get commandEnvironmentFailed =>
+      'Failed to prepare the command environment';
+
+  @override
+  String get terminal => 'Terminal';
+
+  @override
+  String get showTerminal => 'Show terminal';
+
+  @override
+  String get hideTerminal => 'Hide terminal';
+
+  @override
+  String get terminalCommand => 'Terminal command';
+
+  @override
+  String get sendTerminalCommand => 'Send command';
+
+  @override
+  String get clearTerminal => 'Clear terminal';
+
+  @override
+  String get noTerminalOutput => 'No terminal output';
+
+  @override
   String get save => 'Save';
 
   @override

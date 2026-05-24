@@ -164,6 +164,54 @@ abstract class AppLocalizations {
   /// **'Command is required'**
   String get commandRequired;
 
+  /// No description provided for @commandEnvironmentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to prepare the command environment'**
+  String get commandEnvironmentFailed;
+
+  /// No description provided for @terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get terminal;
+
+  /// No description provided for @showTerminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Show terminal'**
+  String get showTerminal;
+
+  /// No description provided for @hideTerminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide terminal'**
+  String get hideTerminal;
+
+  /// No description provided for @terminalCommand.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal command'**
+  String get terminalCommand;
+
+  /// No description provided for @sendTerminalCommand.
+  ///
+  /// In en, this message translates to:
+  /// **'Send command'**
+  String get sendTerminalCommand;
+
+  /// No description provided for @clearTerminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear terminal'**
+  String get clearTerminal;
+
+  /// No description provided for @noTerminalOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'No terminal output'**
+  String get noTerminalOutput;
+
   /// No description provided for @save.
   ///
   /// In en, this message translates to:

@@ -4,6 +4,7 @@ import 'package:scheduled_job/core/l10n/app_localizations_context.dart';
 import 'package:scheduled_job/features/scheduled_jobs/presentation/scheduled_jobs_view_model.dart';
 import 'package:scheduled_job/features/scheduled_jobs/presentation/widgets/job_list_pane.dart';
 import 'package:scheduled_job/features/scheduled_jobs/presentation/widgets/new_scheduled_job_form.dart';
+import 'package:scheduled_job/features/scheduled_jobs/presentation/widgets/terminal_pane.dart';
 
 class ScheduledJobsPage extends StatelessWidget {
   const ScheduledJobsPage({super.key});
@@ -50,6 +51,24 @@ class ScheduledJobsPage extends StatelessWidget {
                   child: viewModel.isCreating
                       ? const NewScheduledJobForm()
                       : const _EmptyDetailsPane(),
+                ),
+                VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: colorScheme.outlineVariant,
+                ),
+                TerminalPane(
+                  isExpanded: viewModel.isTerminalExpanded,
+                  lines: viewModel.terminalLines,
+                  inputError: viewModel.terminalInputError,
+                  onToggleExpanded: viewModel.toggleTerminalExpanded,
+                  onSubmitCommand: (commandText) {
+                    viewModel.submitTerminalCommand(
+                      commandText: commandText,
+                      commandRequired: l10n.commandRequired,
+                    );
+                  },
+                  onClear: viewModel.clearTerminalLines,
                 ),
               ],
             ),

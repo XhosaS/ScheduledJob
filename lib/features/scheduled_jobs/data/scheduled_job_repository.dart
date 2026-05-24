@@ -9,6 +9,7 @@ abstract class ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     bool isEnabled = false,
   });
 
@@ -18,6 +19,7 @@ abstract class ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     required bool isEnabled,
   });
 
@@ -46,6 +48,7 @@ class SqliteScheduledJobRepository implements ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     bool isEnabled = false,
   }) {
     return _database.insertJob(
@@ -53,6 +56,7 @@ class SqliteScheduledJobRepository implements ScheduledJobRepository {
       description: description,
       runMode: runMode,
       command: command,
+      commandConfigPath: commandConfigPath,
       isEnabled: isEnabled,
     );
   }
@@ -64,6 +68,7 @@ class SqliteScheduledJobRepository implements ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     required bool isEnabled,
   }) {
     return _database.updateJob(
@@ -72,6 +77,7 @@ class SqliteScheduledJobRepository implements ScheduledJobRepository {
       description: description,
       runMode: runMode,
       command: command,
+      commandConfigPath: commandConfigPath,
       isEnabled: isEnabled,
     );
   }

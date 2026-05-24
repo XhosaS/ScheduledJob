@@ -1,8 +1,14 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:scheduled_job/features/scheduled_jobs/application/background_command_terminal_service.dart';
+import 'package:scheduled_job/features/scheduled_jobs/application/command_environment_service.dart';
 import 'package:scheduled_job/features/scheduled_jobs/application/scheduled_job_scheduler.dart';
+import 'package:scheduled_job/features/scheduled_jobs/data/command_config_repository.dart';
 import 'package:scheduled_job/features/scheduled_jobs/data/scheduled_job_repository.dart';
+import 'package:scheduled_job/features/scheduled_jobs/domain/command_config.dart';
 import 'package:scheduled_job/features/scheduled_jobs/domain/scheduled_job.dart';
 
 enum ScheduleMode { afterMinutes, atTime }
@@ -56,12 +62,40 @@ class ScheduledJobValidationMessages {
     required this.positiveMinutesRequired,
     required this.dateTimeRequired,
     required this.commandRequired,
+    required this.commandEnvironmentFailed,
   });
 
   final String descriptionRequired;
   final String positiveMinutesRequired;
   final String dateTimeRequired;
   final String commandRequired;
+  final String commandEnvironmentFailed;
+}
+
+class TerminalLine {
+  const TerminalLine({
+    required this.timestamp,
+    required this.text,
+    required this.isError,
+    required this.source,
+    this.jobId,
+  });
+
+  factory TerminalLine.fromEvent(TerminalEvent event) {
+    return TerminalLine(
+      timestamp: event.timestamp,
+      text: event.text,
+      isError: event.isError,
+      source: event.source,
+      jobId: event.jobId,
+    );
+  }
+
+  final DateTime timestamp;
+  final String text;
+  final bool isError;
+  final TerminalEventSource source;
+  final int? jobId;
 }
 
 class ScheduledJobsViewModel extends ChangeNotifier {
@@ -69,13 +103,24 @@ class ScheduledJobsViewModel extends ChangeNotifier {
     this._repository, {
     NowProvider? nowProvider,
     ScheduledJobScheduler? scheduler,
+    CommandConfigRepository? commandConfigRepository,
+    CommandEnvironmentService? commandEnvironmentService,
+    BackgroundCommandTerminalService? terminalService,
+    Locale? locale,
   }) : _nowProvider = nowProvider ?? DateTime.now,
-       _scheduler = scheduler ?? IsolateScheduledJobScheduler();
+       _scheduler = scheduler ?? IsolateScheduledJobScheduler(),
+       _commandConfigRepository = commandConfigRepository,
+       _terminalService = terminalService,
+       _locale = locale ?? const Locale('en');
 
   final ScheduledJobRepository _repository;
   final NowProvider _nowProvider;
   final ScheduledJobScheduler _scheduler;
+  final CommandConfigRepository? _commandConfigRepository;
+  final BackgroundCommandTerminalService? _terminalService;
+  final Locale _locale;
   StreamSubscription<int>? _completedJobSubscription;
+  StreamSubscription<TerminalEvent>? _terminalEventSubscription;
 
   List<ScheduledJob> _jobs = const [];
   bool _isLoading = false;
@@ -89,6 +134,12 @@ class ScheduledJobsViewModel extends ChangeNotifier {
   String? _descriptionError;
   String? _timeError;
   String? _commandError;
+  String? _commandEnvironmentError;
+  String? _terminalInputError;
+  List<RecommendedCommand> _recommendedCommands = const [];
+  List<TerminalLine> _terminalLines = const [];
+  bool _isTerminalExpanded = false;
+  String? _selectedRecommendedCommandSlug;
   bool _isDisposed = false;
 
   List<ScheduledJob> get jobs => _jobs;
@@ -103,13 +154,20 @@ class ScheduledJobsViewModel extends ChangeNotifier {
   String? get descriptionError => _descriptionError;
   String? get timeError => _timeError;
   String? get commandError => _commandError;
+  String? get commandEnvironmentError => _commandEnvironmentError;
+  String? get terminalInputError => _terminalInputError;
+  List<RecommendedCommand> get recommendedCommands => _recommendedCommands;
+  List<TerminalLine> get terminalLines => _terminalLines;
+  bool get isTerminalExpanded => _isTerminalExpanded;
 
   Future<void> loadJobs() async {
     await _ensureSchedulerStarted();
     _isLoading = true;
     notifyListeners();
 
+    await _loadRecommendedCommands();
     _jobs = await _repository.fetchJobs();
+    await _repairMissingCommandFolders();
     if (_isDisposed) {
       return;
     }
@@ -143,6 +201,8 @@ class ScheduledJobsViewModel extends ChangeNotifier {
     _descriptionError = null;
     _timeError = null;
     _commandError = null;
+    _commandEnvironmentError = null;
+    _selectedRecommendedCommandSlug = null;
     notifyListeners();
   }
 
@@ -168,7 +228,38 @@ class ScheduledJobsViewModel extends ChangeNotifier {
 
   void selectRunMode(JobRunMode mode) {
     _runMode = mode;
+    _selectedRecommendedCommandSlug = null;
     notifyListeners();
+  }
+
+  void selectRecommendedCommand(RecommendedCommand command) {
+    _runMode = command.config.type;
+    _selectedRecommendedCommandSlug = command.slug;
+    notifyListeners();
+  }
+
+  void toggleTerminalExpanded() {
+    _isTerminalExpanded = !_isTerminalExpanded;
+    notifyListeners();
+  }
+
+  void clearTerminalLines() {
+    _terminalLines = const [];
+    notifyListeners();
+  }
+
+  Future<void> submitTerminalCommand({
+    required String commandText,
+    required String commandRequired,
+  }) async {
+    final command = commandText.trim();
+    _terminalInputError = command.isEmpty ? commandRequired : null;
+    notifyListeners();
+    if (_terminalInputError != null) {
+      return;
+    }
+
+    await _terminalService?.enqueueUserCommand(command);
   }
 
   Future<void> saveJob({
@@ -192,6 +283,7 @@ class ScheduledJobsViewModel extends ChangeNotifier {
         ? validationMessages.dateTimeRequired
         : null;
     _commandError = command.isEmpty ? validationMessages.commandRequired : null;
+    _commandEnvironmentError = null;
     notifyListeners();
 
     if (_descriptionError != null ||
@@ -205,24 +297,59 @@ class ScheduledJobsViewModel extends ChangeNotifier {
         ? _nowProvider().add(Duration(minutes: minutes!))
         : _selectedClockTime!.nextOccurrence(_nowProvider());
 
+    final commandConfig = CommandConfig(
+      type: _runMode,
+      command: command,
+      description: description,
+    );
     final selectedJob = _selectedJob;
-    if (selectedJob == null) {
-      await _repository.addJob(
-        scheduledAt: scheduledAt,
-        description: description,
-        runMode: _runMode,
-        command: command,
-        isEnabled: false,
-      );
-    } else {
-      await _repository.updateJob(
-        id: selectedJob.id,
-        scheduledAt: scheduledAt,
-        description: description,
-        runMode: _runMode,
-        command: command,
-        isEnabled: selectedJob.isEnabled,
-      );
+    ScheduledJob? createdJob;
+    try {
+      if (selectedJob == null) {
+        createdJob = await _repository.addJob(
+          scheduledAt: scheduledAt,
+          description: description,
+          runMode: _runMode,
+          command: command,
+          commandConfigPath: '',
+          isEnabled: false,
+        );
+        final commandConfigPath = await _prepareCommandFolder(
+          jobId: createdJob.id,
+          config: commandConfig,
+        );
+        await _repository.updateJob(
+          id: createdJob.id,
+          scheduledAt: scheduledAt,
+          description: description,
+          runMode: _runMode,
+          command: command,
+          commandConfigPath: commandConfigPath,
+          isEnabled: false,
+        );
+      } else {
+        final commandConfigPath = await _prepareCommandFolder(
+          jobId: selectedJob.id,
+          config: commandConfig,
+          sourceConfigPath: selectedJob.commandConfigPath,
+        );
+        await _repository.updateJob(
+          id: selectedJob.id,
+          scheduledAt: scheduledAt,
+          description: description,
+          runMode: _runMode,
+          command: command,
+          commandConfigPath: commandConfigPath,
+          isEnabled: selectedJob.isEnabled,
+        );
+      }
+    } on Object {
+      if (createdJob != null) {
+        await _repository.deleteJob(createdJob.id);
+      }
+      _commandEnvironmentError = validationMessages.commandEnvironmentFailed;
+      notifyListeners();
+      return;
     }
 
     _jobs = await _repository.fetchJobs();
@@ -264,6 +391,9 @@ class ScheduledJobsViewModel extends ChangeNotifier {
 
   Future<void> deleteJob(ScheduledJob job) async {
     await _repository.deleteJob(job.id);
+    await _commandConfigRepository?.deleteJobCommandFolder(
+      job.commandConfigPath,
+    );
     _scheduler.removeJob(job.id);
     _jobs = await _repository.fetchJobs();
     if (_isDisposed) {
@@ -287,6 +417,8 @@ class ScheduledJobsViewModel extends ChangeNotifier {
     _descriptionError = null;
     _timeError = null;
     _commandError = null;
+    _commandEnvironmentError = null;
+    _selectedRecommendedCommandSlug = null;
   }
 
   Future<void> _ensureSchedulerStarted() async {
@@ -302,7 +434,80 @@ class ScheduledJobsViewModel extends ChangeNotifier {
     _completedJobSubscription = _scheduler.completedJobIds.listen(
       _handleScheduledJobCompleted,
     );
+    _terminalEventSubscription = _terminalService?.events.listen(
+      _handleTerminalEvent,
+    );
     _schedulerStarted = true;
+  }
+
+  Future<void> _loadRecommendedCommands() async {
+    final repository = _commandConfigRepository;
+    if (repository == null) {
+      return;
+    }
+    _recommendedCommands = await repository.fetchRecommendedCommands(_locale);
+  }
+
+  Future<void> _repairMissingCommandFolders() async {
+    final repository = _commandConfigRepository;
+    if (repository == null) {
+      return;
+    }
+
+    var repaired = false;
+    for (final job in _jobs.where((job) => job.commandConfigPath.isEmpty)) {
+      final draft = await repository.createJobCommandFolderDraft(
+        jobId: job.id,
+        config: CommandConfig(
+          type: job.runMode,
+          command: job.command,
+          description: job.description,
+        ),
+      );
+      final folder = await draft.commit();
+      await _repository.updateJob(
+        id: job.id,
+        scheduledAt: job.scheduledAt,
+        description: job.description,
+        runMode: job.runMode,
+        command: job.command,
+        commandConfigPath: folder.relativeConfigPath,
+        isEnabled: job.isEnabled,
+      );
+      repaired = true;
+    }
+
+    if (repaired) {
+      _jobs = await _repository.fetchJobs();
+    }
+  }
+
+  Future<String> _prepareCommandFolder({
+    required int jobId,
+    required CommandConfig config,
+    String? sourceConfigPath,
+  }) async {
+    final repository = _commandConfigRepository;
+    if (repository == null) {
+      return '';
+    }
+
+    final draft = await repository.createJobCommandFolderDraft(
+      jobId: jobId,
+      config: config,
+      templateSlug: _selectedRecommendedCommandSlug,
+      sourceConfigPath: _selectedRecommendedCommandSlug == null
+          ? sourceConfigPath
+          : null,
+      locale: _selectedRecommendedCommandSlug == null ? null : _locale,
+    );
+    try {
+      final folder = await draft.commit();
+      return folder.relativeConfigPath;
+    } on Object {
+      await draft.discard();
+      rethrow;
+    }
   }
 
   Future<void> _handleScheduledJobCompleted(int jobId) async {
@@ -325,10 +530,19 @@ class ScheduledJobsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _handleTerminalEvent(TerminalEvent event) {
+    final currentLines = _terminalLines.length >= 499
+        ? _terminalLines.sublist(_terminalLines.length - 499)
+        : _terminalLines;
+    _terminalLines = [...currentLines, TerminalLine.fromEvent(event)];
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _isDisposed = true;
     _completedJobSubscription?.cancel();
+    _terminalEventSubscription?.cancel();
     _scheduler.dispose();
     super.dispose();
   }

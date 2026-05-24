@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:scheduled_job/core/l10n/app_localizations_context.dart';
+import 'package:scheduled_job/features/scheduled_jobs/application/background_command_terminal_service.dart';
+import 'package:scheduled_job/features/scheduled_jobs/application/command_environment_service.dart';
 import 'package:scheduled_job/features/scheduled_jobs/application/scheduled_job_scheduler.dart';
+import 'package:scheduled_job/features/scheduled_jobs/data/command_config_repository.dart';
 import 'package:scheduled_job/features/scheduled_jobs/data/scheduled_job_repository.dart';
 import 'package:scheduled_job/features/scheduled_jobs/presentation/scheduled_jobs_page.dart';
 import 'package:scheduled_job/features/scheduled_jobs/presentation/scheduled_jobs_view_model.dart';
@@ -13,17 +16,29 @@ class MyApp extends StatelessWidget {
     super.key,
     this.locale,
     this.scheduler,
+    this.commandConfigRepository,
+    this.commandEnvironmentService,
+    this.terminalService,
   });
 
   final ScheduledJobRepository repository;
   final Locale? locale;
   final ScheduledJobScheduler? scheduler;
+  final CommandConfigRepository? commandConfigRepository;
+  final CommandEnvironmentService? commandEnvironmentService;
+  final BackgroundCommandTerminalService? terminalService;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) =>
-          ScheduledJobsViewModel(repository, scheduler: scheduler)..loadJobs(),
+      create: (_) => ScheduledJobsViewModel(
+        repository,
+        scheduler: scheduler,
+        commandConfigRepository: commandConfigRepository,
+        commandEnvironmentService: commandEnvironmentService,
+        terminalService: terminalService,
+        locale: locale,
+      )..loadJobs(),
       child: MaterialApp(
         locale: locale,
         supportedLocales: AppLocalizations.supportedLocales,

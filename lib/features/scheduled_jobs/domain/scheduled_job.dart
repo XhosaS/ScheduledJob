@@ -7,10 +7,16 @@ enum JobRunMode {
   final String storageValue;
 
   static JobRunMode fromStorageValue(String value) {
-    return JobRunMode.values.firstWhere(
-      (mode) => mode.storageValue == value,
-      orElse: () => JobRunMode.powershell,
-    );
+    return tryFromStorageValue(value) ?? JobRunMode.powershell;
+  }
+
+  static JobRunMode? tryFromStorageValue(String value) {
+    for (final mode in JobRunMode.values) {
+      if (mode.storageValue == value) {
+        return mode;
+      }
+    }
+    return null;
   }
 }
 
@@ -21,6 +27,7 @@ class ScheduledJob {
     required this.description,
     required this.runMode,
     required this.command,
+    required this.commandConfigPath,
     required this.isEnabled,
   });
 
@@ -29,6 +36,7 @@ class ScheduledJob {
   final String description;
   final JobRunMode runMode;
   final String command;
+  final String commandConfigPath;
   final bool isEnabled;
 
   ScheduledJob copyWith({
@@ -37,6 +45,7 @@ class ScheduledJob {
     String? description,
     JobRunMode? runMode,
     String? command,
+    String? commandConfigPath,
     bool? isEnabled,
   }) {
     return ScheduledJob(
@@ -45,6 +54,7 @@ class ScheduledJob {
       description: description ?? this.description,
       runMode: runMode ?? this.runMode,
       command: command ?? this.command,
+      commandConfigPath: commandConfigPath ?? this.commandConfigPath,
       isEnabled: isEnabled ?? this.isEnabled,
     );
   }

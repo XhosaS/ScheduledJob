@@ -41,6 +41,7 @@ void main() {
       description: 'Write report',
       runMode: JobRunMode.powershell,
       command: 'Get-Process',
+      commandConfigPath: 'jobs/1/command.json',
     );
     final jobs = await repository.fetchJobs();
 
@@ -51,6 +52,7 @@ void main() {
     expect(jobs.single.description, 'Write report');
     expect(jobs.single.runMode, JobRunMode.powershell);
     expect(jobs.single.command, 'Get-Process');
+    expect(jobs.single.commandConfigPath, 'jobs/1/command.json');
     expect(jobs.single.isEnabled, isFalse);
   });
 
@@ -63,18 +65,21 @@ void main() {
       description: 'Later',
       runMode: JobRunMode.powershell,
       command: 'Later',
+      commandConfigPath: 'jobs/1/command.json',
     );
     await repository.addJob(
       scheduledAt: earlier,
       description: 'Earlier',
       runMode: JobRunMode.powershell,
       command: 'Earlier',
+      commandConfigPath: 'jobs/2/command.json',
     );
     await repository.addJob(
       scheduledAt: earlier,
       description: 'Same time',
       runMode: JobRunMode.python,
       command: 'print("same")',
+      commandConfigPath: 'jobs/3/command.json',
     );
 
     final jobs = await repository.fetchJobs();
@@ -92,6 +97,7 @@ void main() {
       description: 'Draft report',
       runMode: JobRunMode.powershell,
       command: 'Get-Date',
+      commandConfigPath: 'jobs/1/command.json',
     );
 
     await repository.updateJob(
@@ -100,6 +106,7 @@ void main() {
       description: 'Final report',
       runMode: JobRunMode.python,
       command: 'print("final")',
+      commandConfigPath: 'jobs/1/command.json',
       isEnabled: true,
     );
 
@@ -120,6 +127,7 @@ void main() {
       description: 'Draft report',
       runMode: JobRunMode.powershell,
       command: 'Get-Date',
+      commandConfigPath: 'jobs/1/command.json',
     );
 
     await repository.setJobEnabled(
@@ -144,6 +152,7 @@ void main() {
       description: 'Draft report',
       runMode: JobRunMode.powershell,
       command: 'Get-Date',
+      commandConfigPath: 'jobs/1/command.json',
     );
 
     await repository.deleteJob(created.id);
@@ -195,6 +204,7 @@ CREATE TABLE ${ScheduledJobDatabase.tableName} (
     expect(jobs.single.description, 'Legacy job');
     expect(jobs.single.runMode, JobRunMode.powershell);
     expect(jobs.single.command, isEmpty);
+    expect(jobs.single.commandConfigPath, isEmpty);
     expect(jobs.single.isEnabled, isFalse);
   });
 
@@ -246,6 +256,58 @@ CREATE TABLE ${ScheduledJobDatabase.tableName} (
     expect(jobs.single.description, 'Version 2 job');
     expect(jobs.single.runMode, JobRunMode.python);
     expect(jobs.single.command, 'print("legacy")');
+    expect(jobs.single.commandConfigPath, isEmpty);
     expect(jobs.single.isEnabled, isFalse);
+  });
+
+  test('migrates version 3 jobs to version 4 command config path', () async {
+    final path = p.join(
+      await databaseFactoryFfi.getDatabasesPath(),
+      'scheduled_job_v3_migration_test.db',
+    );
+    await databaseFactoryFfi.deleteDatabase(path);
+
+    final v3 = await databaseFactoryFfi.openDatabase(
+      path,
+      options: OpenDatabaseOptions(
+        version: 3,
+        onCreate: (db, version) async {
+          await db.execute('''
+CREATE TABLE ${ScheduledJobDatabase.tableName} (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  scheduled_at INTEGER NOT NULL,
+  description TEXT NOT NULL,
+  run_mode TEXT NOT NULL,
+  command TEXT NOT NULL,
+  is_enabled INTEGER NOT NULL DEFAULT 0
+)
+''');
+        },
+      ),
+    );
+    await v3.insert(ScheduledJobDatabase.tableName, {
+      'scheduled_at': DateTime(2026, 5, 24, 18).millisecondsSinceEpoch,
+      'description': 'Version 3 job',
+      'run_mode': JobRunMode.python.storageValue,
+      'command': 'print("legacy")',
+      'is_enabled': 1,
+    });
+    await v3.close();
+
+    final migratedDatabase = ScheduledJobDatabase(
+      databaseFactory: databaseFactoryFfi,
+      databaseName: 'scheduled_job_v3_migration_test.db',
+    );
+    final migratedRepository = SqliteScheduledJobRepository(migratedDatabase);
+    addTearDown(() async {
+      await migratedDatabase.close();
+      await databaseFactoryFfi.deleteDatabase(path);
+    });
+
+    final jobs = await migratedRepository.fetchJobs();
+
+    expect(jobs.single.description, 'Version 3 job');
+    expect(jobs.single.commandConfigPath, isEmpty);
+    expect(jobs.single.isEnabled, isTrue);
   });
 }

@@ -87,6 +87,13 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
+set(BUNDLED_PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/python/windows-x64")
+if(EXISTS "${BUNDLED_PYTHON_DIR}/python.exe")
+  install(DIRECTORY "${BUNDLED_PYTHON_DIR}/"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/runtime/python"
+    COMPONENT Runtime)
+endif()
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"

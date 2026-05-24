@@ -1,8 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
+import 'package:scheduled_job/features/scheduled_jobs/application/background_command_terminal_service.dart';
+import 'package:scheduled_job/features/scheduled_jobs/application/command_environment_service.dart';
 import 'package:scheduled_job/features/scheduled_jobs/application/scheduled_job_scheduler.dart';
+import 'package:scheduled_job/features/scheduled_jobs/data/command_config_repository.dart';
 import 'package:scheduled_job/features/scheduled_jobs/data/scheduled_job_repository.dart';
+import 'package:scheduled_job/features/scheduled_jobs/domain/command_config.dart';
 import 'package:scheduled_job/features/scheduled_jobs/domain/scheduled_job.dart';
 import 'package:scheduled_job/features/scheduled_jobs/presentation/scheduled_jobs_view_model.dart';
 
@@ -12,6 +17,7 @@ void main() {
     positiveMinutesRequired: 'Enter a positive number of minutes',
     dateTimeRequired: 'Select a time',
     commandRequired: 'Command is required',
+    commandEnvironmentFailed: 'Failed to prepare the command environment',
   );
 
   test(
@@ -24,6 +30,7 @@ void main() {
           description: 'Existing job',
           runMode: JobRunMode.powershell,
           command: 'Get-Date',
+          commandConfigPath: 'jobs/1/command.json',
           isEnabled: true,
         ),
       ]);
@@ -92,6 +99,60 @@ void main() {
       expect(repository.addedJobs.single.isEnabled, isFalse);
       expect(viewModel.jobs.single.description, 'Write report');
       expect(viewModel.isCreating, isFalse);
+    },
+  );
+
+  test('saveJob creates command folder before storing config path', () async {
+    final repository = _FakeScheduledJobRepository();
+    final commandConfigRepository = _FakeCommandConfigRepository();
+    final commandEnvironmentService = _FakeCommandEnvironmentService();
+    final viewModel = ScheduledJobsViewModel(
+      repository,
+      scheduler: _FakeScheduledJobScheduler(),
+      commandConfigRepository: commandConfigRepository,
+      commandEnvironmentService: commandEnvironmentService,
+    )..startCreating();
+
+    viewModel.selectRunMode(JobRunMode.python);
+    await viewModel.saveJob(
+      minutesText: '20',
+      descriptionText: 'Python job',
+      commandText: 'print("ready")',
+      validationMessages: messages,
+    );
+
+    expect(commandEnvironmentService.preparedFolders, isEmpty);
+    expect(
+      repository.updatedJobs.single.commandConfigPath,
+      'jobs/1/command.json',
+    );
+    expect(viewModel.jobs.single.commandConfigPath, 'jobs/1/command.json');
+  });
+
+  test(
+    'saveJob does not prepare Python environment during form save',
+    () async {
+      final repository = _FakeScheduledJobRepository();
+      final commandEnvironmentService = _FakeCommandEnvironmentService()
+        ..shouldFail = true;
+      final viewModel = ScheduledJobsViewModel(
+        repository,
+        scheduler: _FakeScheduledJobScheduler(),
+        commandConfigRepository: _FakeCommandConfigRepository(),
+        commandEnvironmentService: commandEnvironmentService,
+      )..startCreating();
+
+      viewModel.selectRunMode(JobRunMode.python);
+      await viewModel.saveJob(
+        minutesText: '20',
+        descriptionText: 'Python job',
+        commandText: 'print("ready")',
+        validationMessages: messages,
+      );
+
+      expect(viewModel.commandEnvironmentError, isNull);
+      expect(commandEnvironmentService.preparedFolders, isEmpty);
+      expect(viewModel.jobs.single.commandConfigPath, 'jobs/1/command.json');
     },
   );
 
@@ -174,6 +235,7 @@ void main() {
       description: 'Draft report',
       runMode: JobRunMode.python,
       command: 'print("draft")',
+      commandConfigPath: 'jobs/1/command.json',
       isEnabled: true,
     );
     final repository = _FakeScheduledJobRepository([existingJob]);
@@ -221,6 +283,7 @@ void main() {
       description: 'Draft report',
       runMode: JobRunMode.python,
       command: 'print("draft")',
+      commandConfigPath: 'jobs/1/command.json',
       isEnabled: false,
     );
     final repository = _FakeScheduledJobRepository([existingJob]);
@@ -243,6 +306,7 @@ void main() {
           description: 'Draft report',
           runMode: JobRunMode.powershell,
           command: 'Get-Date',
+          commandConfigPath: 'jobs/1/command.json',
           isEnabled: false,
         ),
       ]);
@@ -274,6 +338,7 @@ void main() {
         description: 'Draft report',
         runMode: JobRunMode.powershell,
         command: 'Get-Date',
+        commandConfigPath: 'jobs/1/command.json',
         isEnabled: true,
       ),
     ]);
@@ -296,6 +361,7 @@ void main() {
       description: 'Draft report',
       runMode: JobRunMode.powershell,
       command: 'Get-Date',
+      commandConfigPath: 'jobs/1/command.json',
       isEnabled: true,
     );
     final repository = _FakeScheduledJobRepository([job]);
@@ -311,6 +377,55 @@ void main() {
     expect(viewModel.selectedJob, isNull);
     expect(repository.deletedIds, [1]);
     expect(scheduler.removedJobIds, contains(1));
+  });
+
+  test('terminal events are appended and can be cleared', () async {
+    final repository = _FakeScheduledJobRepository();
+    final terminalService = _FakeTerminalService();
+    final viewModel = ScheduledJobsViewModel(
+      repository,
+      scheduler: _FakeScheduledJobScheduler(),
+      terminalService: terminalService,
+    );
+    await viewModel.loadJobs();
+
+    terminalService.emit(
+      TerminalEvent(
+        timestamp: DateTime(2026, 5, 24, 18),
+        text: 'hello',
+        isError: false,
+        source: TerminalEventSource.userCommand,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(viewModel.terminalLines.single.text, 'hello');
+    viewModel.clearTerminalLines();
+    expect(viewModel.terminalLines, isEmpty);
+  });
+
+  test('submitTerminalCommand validates input and enqueues commands', () async {
+    final repository = _FakeScheduledJobRepository();
+    final terminalService = _FakeTerminalService();
+    final viewModel = ScheduledJobsViewModel(
+      repository,
+      scheduler: _FakeScheduledJobScheduler(),
+      terminalService: terminalService,
+    );
+    await viewModel.loadJobs();
+
+    await viewModel.submitTerminalCommand(
+      commandText: '',
+      commandRequired: 'Command is required',
+    );
+    expect(viewModel.terminalInputError, 'Command is required');
+
+    await viewModel.submitTerminalCommand(
+      commandText: 'Get-Date',
+      commandRequired: 'Command is required',
+    );
+    expect(viewModel.terminalInputError, isNull);
+    expect(terminalService.userCommands, ['Get-Date']);
   });
 }
 
@@ -330,6 +445,7 @@ class _FakeScheduledJobRepository implements ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     bool isEnabled = false,
   }) async {
     final job = ScheduledJob(
@@ -338,6 +454,7 @@ class _FakeScheduledJobRepository implements ScheduledJobRepository {
       description: description,
       runMode: runMode,
       command: command,
+      commandConfigPath: commandConfigPath,
       isEnabled: isEnabled,
     );
     _jobs.add(job);
@@ -377,6 +494,7 @@ class _FakeScheduledJobRepository implements ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     required bool isEnabled,
   }) async {
     final index = _jobs.indexWhere((job) => job.id == id);
@@ -386,6 +504,7 @@ class _FakeScheduledJobRepository implements ScheduledJobRepository {
       description: description,
       runMode: runMode,
       command: command,
+      commandConfigPath: commandConfigPath,
       isEnabled: isEnabled,
     );
     _jobs[index] = job;
@@ -436,5 +555,95 @@ class _FakeScheduledJobScheduler implements ScheduledJobScheduler {
   void dispose() {
     disposed = true;
     _completedJobIds.close();
+  }
+}
+
+class _FakeCommandConfigRepository implements CommandConfigRepository {
+  bool discarded = false;
+
+  @override
+  Future<CommandFolderDraft> createJobCommandFolderDraft({
+    required int jobId,
+    required CommandConfig config,
+    String? templateSlug,
+    String? sourceConfigPath,
+    Locale? locale,
+  }) async {
+    final folder = CommandFolder(
+      relativeConfigPath: 'jobs/$jobId.pending/command.json',
+      absoluteFolderPath: 'jobs/$jobId.pending',
+      absoluteConfigPath: 'jobs/$jobId.pending/command.json',
+    );
+    return CommandFolderDraft(
+      folder: folder,
+      commit: () async => CommandFolder(
+        relativeConfigPath: 'jobs/$jobId/command.json',
+        absoluteFolderPath: 'jobs/$jobId',
+        absoluteConfigPath: 'jobs/$jobId/command.json',
+      ),
+      discard: () async {
+        discarded = true;
+      },
+    );
+  }
+
+  @override
+  Future<void> deleteJobCommandFolder(String relativeConfigPath) async {}
+
+  @override
+  Future<List<RecommendedCommand>> fetchRecommendedCommands(
+    Locale locale,
+  ) async {
+    return const [];
+  }
+
+  @override
+  String resolveConfigPath(String relativeConfigPath) {
+    return relativeConfigPath;
+  }
+}
+
+class _FakeCommandEnvironmentService implements CommandEnvironmentService {
+  final List<CommandFolder> preparedFolders = [];
+  bool shouldFail = false;
+
+  @override
+  Future<void> prepare(CommandFolder folder, CommandConfig config) async {
+    preparedFolders.add(folder);
+    if (shouldFail) {
+      throw StateError('failed');
+    }
+  }
+}
+
+class _FakeTerminalService implements BackgroundCommandTerminalService {
+  final StreamController<TerminalEvent> _events =
+      StreamController<TerminalEvent>.broadcast();
+  final List<ScheduledJob> scheduledJobs = [];
+  final List<String> userCommands = [];
+
+  @override
+  Stream<TerminalEvent> get events => _events.stream;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> enqueueScheduledJob(ScheduledJob job) async {
+    scheduledJobs.add(job);
+  }
+
+  @override
+  Future<void> enqueueUserCommand(String command) async {
+    userCommands.add(command);
+  }
+
+  void emit(TerminalEvent event) {
+    _events.add(event);
+  }
+
+  @override
+  void dispose() {
+    _events.close();
   }
 }

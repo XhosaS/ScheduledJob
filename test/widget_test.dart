@@ -3,26 +3,45 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduled_job/app.dart';
+import 'package:scheduled_job/features/scheduled_jobs/application/background_command_terminal_service.dart';
+import 'package:scheduled_job/features/scheduled_jobs/application/command_environment_service.dart';
 import 'package:scheduled_job/features/scheduled_jobs/application/scheduled_job_scheduler.dart';
+import 'package:scheduled_job/features/scheduled_jobs/data/command_config_repository.dart';
 import 'package:scheduled_job/features/scheduled_jobs/data/scheduled_job_repository.dart';
+import 'package:scheduled_job/features/scheduled_jobs/domain/command_config.dart';
 import 'package:scheduled_job/features/scheduled_jobs/domain/scheduled_job.dart';
 import 'package:scheduled_job/l10n/generated/app_localizations_zh.dart';
 
 void main() {
   late _FakeScheduledJobRepository repository;
   late _FakeScheduledJobScheduler scheduler;
+  late _FakeCommandConfigRepository commandConfigRepository;
+  late _FakeCommandEnvironmentService commandEnvironmentService;
+  late _FakeTerminalService terminalService;
 
   setUp(() {
     repository = _FakeScheduledJobRepository();
     scheduler = _FakeScheduledJobScheduler();
+    commandConfigRepository = _FakeCommandConfigRepository();
+    commandEnvironmentService = _FakeCommandEnvironmentService();
+    terminalService = _FakeTerminalService();
   });
+
+  Widget buildApp({Locale? locale}) {
+    return MyApp(
+      repository: repository,
+      locale: locale,
+      scheduler: scheduler,
+      commandConfigRepository: commandConfigRepository,
+      commandEnvironmentService: commandEnvironmentService,
+      terminalService: terminalService,
+    );
+  }
 
   testWidgets('shows two-page layout with an empty real job list', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      MyApp(repository: repository, scheduler: scheduler),
-    );
+    await tester.pumpWidget(buildApp());
     await tester.pump();
 
     expect(find.text('Scheduled Job'), findsOneWidget);
@@ -39,13 +58,7 @@ void main() {
   ) async {
     final zh = AppLocalizationsZh();
 
-    await tester.pumpWidget(
-      MyApp(
-        repository: repository,
-        locale: const Locale('zh'),
-        scheduler: scheduler,
-      ),
-    );
+    await tester.pumpWidget(buildApp(locale: const Locale('zh')));
     await tester.pumpAndSettle();
 
     expect(find.text(zh.appTitle), findsOneWidget);
@@ -62,9 +75,7 @@ void main() {
   });
 
   testWidgets('creates a scheduled job after minutes', (tester) async {
-    await tester.pumpWidget(
-      MyApp(repository: repository, scheduler: scheduler),
-    );
+    await tester.pumpWidget(buildApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const Key('newScheduledJobButton')));
@@ -109,13 +120,12 @@ void main() {
         description: 'Draft report',
         runMode: JobRunMode.python,
         command: 'print("draft")',
+        commandConfigPath: 'jobs/1/command.json',
         isEnabled: false,
       ),
     );
 
-    await tester.pumpWidget(
-      MyApp(repository: repository, scheduler: scheduler),
-    );
+    await tester.pumpWidget(buildApp());
     await tester.pump();
 
     await tester.tap(find.text('Draft report'));
@@ -155,9 +165,7 @@ void main() {
   testWidgets('does not save a scheduled job without description', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      MyApp(repository: repository, scheduler: scheduler),
-    );
+    await tester.pumpWidget(buildApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const Key('newScheduledJobButton')));
@@ -176,9 +184,7 @@ void main() {
   testWidgets('recommended shutdown command fills command and description', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      MyApp(repository: repository, scheduler: scheduler),
-    );
+    await tester.pumpWidget(buildApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const Key('newScheduledJobButton')));
@@ -186,7 +192,9 @@ void main() {
     await tester.tap(find.text('Python'));
     await tester.pump();
 
-    await tester.tap(find.byKey(const Key('recommendedShutdownCommandChip')));
+    await tester.tap(
+      find.byKey(const Key('recommendedCommandChip-powershell_shutdown')),
+    );
     await tester.pump();
 
     expect(
@@ -208,15 +216,15 @@ void main() {
   });
 
   testWidgets('recommended shutdown command can be saved', (tester) async {
-    await tester.pumpWidget(
-      MyApp(repository: repository, scheduler: scheduler),
-    );
+    await tester.pumpWidget(buildApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const Key('newScheduledJobButton')));
     await tester.pump();
     await tester.enterText(find.byKey(const Key('minutesField')), '20');
-    await tester.tap(find.byKey(const Key('recommendedShutdownCommandChip')));
+    await tester.tap(
+      find.byKey(const Key('recommendedCommandChip-powershell_shutdown')),
+    );
     await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('saveScheduledJobButton')));
     await tester.tap(find.byKey(const Key('saveScheduledJobButton')));
@@ -238,13 +246,12 @@ void main() {
         description: 'Draft report',
         runMode: JobRunMode.powershell,
         command: 'Get-Date',
+        commandConfigPath: 'jobs/1/command.json',
         isEnabled: false,
       ),
     );
 
-    await tester.pumpWidget(
-      MyApp(repository: repository, scheduler: scheduler),
-    );
+    await tester.pumpWidget(buildApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const Key('jobEnabledSwitch-1')));
@@ -266,13 +273,12 @@ void main() {
         description: 'Draft report',
         runMode: JobRunMode.powershell,
         command: 'Get-Date',
+        commandConfigPath: 'jobs/1/command.json',
         isEnabled: true,
       ),
     );
 
-    await tester.pumpWidget(
-      MyApp(repository: repository, scheduler: scheduler),
-    );
+    await tester.pumpWidget(buildApp());
     await tester.pump();
 
     await tester.longPress(find.text('Draft report'));
@@ -286,6 +292,29 @@ void main() {
     expect(find.text('Draft report'), findsNothing);
     expect(await repository.fetchJobs(), isEmpty);
     expect(scheduler.removedJobIds, contains(1));
+  });
+
+  testWidgets('terminal pane is collapsed by default and accepts commands', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pump();
+
+    expect(find.byKey(const Key('terminalCollapsedToggle')), findsOneWidget);
+    expect(find.byKey(const Key('terminalCommandField')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('terminalCollapsedToggle')));
+    await tester.pump();
+
+    expect(find.byKey(const Key('terminalCommandField')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('terminalCommandField')),
+      'Get-Date',
+    );
+    await tester.tap(find.byKey(const Key('terminalSendButton')));
+    await tester.pump();
+
+    expect(terminalService.userCommands, ['Get-Date']);
   });
 }
 
@@ -302,6 +331,7 @@ class _FakeScheduledJobRepository implements ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     bool isEnabled = false,
   }) async {
     final job = ScheduledJob(
@@ -310,6 +340,7 @@ class _FakeScheduledJobRepository implements ScheduledJobRepository {
       description: description,
       runMode: runMode,
       command: command,
+      commandConfigPath: commandConfigPath,
       isEnabled: isEnabled,
     );
     _jobs.add(job);
@@ -333,6 +364,7 @@ class _FakeScheduledJobRepository implements ScheduledJobRepository {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     required bool isEnabled,
   }) async {
     final index = _jobs.indexWhere((job) => job.id == id);
@@ -342,6 +374,7 @@ class _FakeScheduledJobRepository implements ScheduledJobRepository {
       description: description,
       runMode: runMode,
       command: command,
+      commandConfigPath: commandConfigPath,
       isEnabled: isEnabled,
     );
     _jobs[index] = job;
@@ -395,5 +428,94 @@ class _FakeScheduledJobScheduler implements ScheduledJobScheduler {
   @override
   void dispose() {
     _completedJobIds.close();
+  }
+}
+
+class _FakeCommandConfigRepository implements CommandConfigRepository {
+  final List<RecommendedCommand> commands = const [
+    RecommendedCommand(
+      slug: 'powershell_shutdown',
+      config: CommandConfig(
+        type: JobRunMode.powershell,
+        command: 'Stop-Computer -Force',
+        description: 'Shutdown this computer',
+      ),
+    ),
+  ];
+  final List<String> deletedPaths = [];
+
+  @override
+  Future<CommandFolderDraft> createJobCommandFolderDraft({
+    required int jobId,
+    required CommandConfig config,
+    String? templateSlug,
+    String? sourceConfigPath,
+    Locale? locale,
+  }) async {
+    final folder = CommandFolder(
+      relativeConfigPath: 'jobs/$jobId.pending/command.json',
+      absoluteFolderPath: 'jobs/$jobId.pending',
+      absoluteConfigPath: 'jobs/$jobId.pending/command.json',
+    );
+    return CommandFolderDraft(
+      folder: folder,
+      commit: () async => CommandFolder(
+        relativeConfigPath: 'jobs/$jobId/command.json',
+        absoluteFolderPath: 'jobs/$jobId',
+        absoluteConfigPath: 'jobs/$jobId/command.json',
+      ),
+      discard: () async {},
+    );
+  }
+
+  @override
+  Future<void> deleteJobCommandFolder(String relativeConfigPath) async {
+    deletedPaths.add(relativeConfigPath);
+  }
+
+  @override
+  Future<List<RecommendedCommand>> fetchRecommendedCommands(
+    Locale locale,
+  ) async {
+    return commands;
+  }
+
+  @override
+  String resolveConfigPath(String relativeConfigPath) {
+    return relativeConfigPath;
+  }
+}
+
+class _FakeCommandEnvironmentService implements CommandEnvironmentService {
+  final List<CommandFolder> preparedFolders = [];
+
+  @override
+  Future<void> prepare(CommandFolder folder, CommandConfig config) async {
+    preparedFolders.add(folder);
+  }
+}
+
+class _FakeTerminalService implements BackgroundCommandTerminalService {
+  final StreamController<TerminalEvent> _events =
+      StreamController<TerminalEvent>.broadcast();
+  final List<String> userCommands = [];
+
+  @override
+  Stream<TerminalEvent> get events => _events.stream;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> enqueueScheduledJob(ScheduledJob job) async {}
+
+  @override
+  Future<void> enqueueUserCommand(String command) async {
+    userCommands.add(command);
+  }
+
+  @override
+  void dispose() {
+    _events.close();
   }
 }

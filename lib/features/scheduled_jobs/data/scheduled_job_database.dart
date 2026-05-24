@@ -27,7 +27,7 @@ class ScheduledJobDatabase {
     return _database = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 4,
         onCreate: (db, version) async {
           await _createSchema(db);
         },
@@ -45,6 +45,11 @@ class ScheduledJobDatabase {
               'ALTER TABLE $tableName ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 0',
             );
           }
+          if (oldVersion < 4) {
+            await db.execute(
+              "ALTER TABLE $tableName ADD COLUMN command_config_path TEXT NOT NULL DEFAULT ''",
+            );
+          }
         },
       ),
     );
@@ -60,6 +65,7 @@ class ScheduledJobDatabase {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     bool isEnabled = false,
   }) async {
     final db = await database;
@@ -68,6 +74,7 @@ class ScheduledJobDatabase {
       'description': description,
       'run_mode': runMode.storageValue,
       'command': command,
+      'command_config_path': commandConfigPath,
       'is_enabled': isEnabled ? 1 : 0,
     });
 
@@ -77,6 +84,7 @@ class ScheduledJobDatabase {
       description: description,
       runMode: runMode,
       command: command,
+      commandConfigPath: commandConfigPath,
       isEnabled: isEnabled,
     );
   }
@@ -87,6 +95,7 @@ class ScheduledJobDatabase {
     required String description,
     required JobRunMode runMode,
     required String command,
+    required String commandConfigPath,
     required bool isEnabled,
   }) async {
     final db = await database;
@@ -97,6 +106,7 @@ class ScheduledJobDatabase {
         'description': description,
         'run_mode': runMode.storageValue,
         'command': command,
+        'command_config_path': commandConfigPath,
         'is_enabled': isEnabled ? 1 : 0,
       },
       where: 'id = ?',
@@ -109,6 +119,7 @@ class ScheduledJobDatabase {
       description: description,
       runMode: runMode,
       command: command,
+      commandConfigPath: commandConfigPath,
       isEnabled: isEnabled,
     );
   }
@@ -150,6 +161,7 @@ class ScheduledJobDatabase {
       description: row['description']! as String,
       runMode: JobRunMode.fromStorageValue(row['run_mode']! as String),
       command: row['command']! as String,
+      commandConfigPath: row['command_config_path']! as String,
       isEnabled: (row['is_enabled']! as int) == 1,
     );
   }
@@ -162,6 +174,7 @@ CREATE TABLE $tableName (
   description TEXT NOT NULL,
   run_mode TEXT NOT NULL,
   command TEXT NOT NULL,
+  command_config_path TEXT NOT NULL,
   is_enabled INTEGER NOT NULL DEFAULT 0
 )
 ''');

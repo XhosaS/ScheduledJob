@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:scheduled_job/core/l10n/app_localizations_context.dart';
+import 'package:scheduled_job/features/scheduled_jobs/domain/command_config.dart';
 import 'package:scheduled_job/features/scheduled_jobs/domain/scheduled_job.dart';
 import 'package:scheduled_job/features/scheduled_jobs/presentation/scheduled_jobs_view_model.dart';
 
@@ -12,9 +13,6 @@ class NewScheduledJobForm extends StatefulWidget {
 }
 
 class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
-  static const _shutdownCommand = 'Stop-Computer -Force';
-  static const _shutdownDescription = 'Shutdown this computer';
-
   final TextEditingController _minutesController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _commandController = TextEditingController();
@@ -136,8 +134,18 @@ class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
             const SizedBox(height: 20),
             _RecommendedCommands(
               title: l10n.recommendedCommands,
-              onShutdownSelected: _applyShutdownRecommendation,
+              commands: viewModel.recommendedCommands,
+              onSelected: _applyRecommendation,
             ),
+            if (viewModel.commandEnvironmentError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                viewModel.commandEnvironmentError!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colorScheme.error),
+              ),
+            ],
             const SizedBox(height: 20),
             TextField(
               key: const Key('commandField'),
@@ -185,6 +193,7 @@ class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
                         positiveMinutesRequired: l10n.positiveMinutesRequired,
                         dateTimeRequired: l10n.dateTimeRequired,
                         commandRequired: l10n.commandRequired,
+                        commandEnvironmentFailed: l10n.commandEnvironmentFailed,
                       ),
                     );
                   },
@@ -235,21 +244,23 @@ class _NewScheduledJobFormState extends State<NewScheduledJobForm> {
     _commandController.text = selectedJob.command;
   }
 
-  void _applyShutdownRecommendation() {
-    context.read<ScheduledJobsViewModel>().selectRunMode(JobRunMode.powershell);
-    _commandController.text = _shutdownCommand;
-    _descriptionController.text = _shutdownDescription;
+  void _applyRecommendation(RecommendedCommand command) {
+    context.read<ScheduledJobsViewModel>().selectRecommendedCommand(command);
+    _commandController.text = command.config.command;
+    _descriptionController.text = command.config.description;
   }
 }
 
 class _RecommendedCommands extends StatelessWidget {
   const _RecommendedCommands({
     required this.title,
-    required this.onShutdownSelected,
+    required this.commands,
+    required this.onSelected,
   });
 
   final String title;
-  final VoidCallback onShutdownSelected;
+  final List<RecommendedCommand> commands;
+  final ValueChanged<RecommendedCommand> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -276,18 +287,26 @@ class _RecommendedCommands extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                ActionChip(
-                  key: const Key('recommendedShutdownCommandChip'),
-                  avatar: const Icon(Icons.power_settings_new, size: 18),
-                  label: const Text('PowerShell shutdown'),
-                  onPressed: onShutdownSelected,
-                ),
+                for (final command in commands)
+                  ActionChip(
+                    key: Key('recommendedCommandChip-${command.slug}'),
+                    avatar: Icon(_iconFor(command.config.type), size: 18),
+                    label: Text(command.config.description),
+                    onPressed: () => onSelected(command),
+                  ),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  IconData _iconFor(JobRunMode runMode) {
+    return switch (runMode) {
+      JobRunMode.powershell => Icons.terminal,
+      JobRunMode.python => Icons.code,
+    };
   }
 }
 

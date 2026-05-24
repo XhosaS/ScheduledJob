@@ -42,6 +42,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commandRequired => '请输入命令';
 
   @override
+  String get commandEnvironmentFailed => '命令运行环境准备失败';
+
+  @override
+  String get terminal => '命令行';
+
+  @override
+  String get showTerminal => '显示命令行';
+
+  @override
+  String get hideTerminal => '隐藏命令行';
+
+  @override
+  String get terminalCommand => '命令行命令';
+
+  @override
+  String get sendTerminalCommand => '发送命令';
+
+  @override
+  String get clearTerminal => '清空命令行';
+
+  @override
+  String get noTerminalOutput => '暂无命令行输出';
+
+  @override
   String get save => '保存';
 
   @override

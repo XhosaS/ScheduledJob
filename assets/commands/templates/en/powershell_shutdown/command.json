@@ -1,0 +1,5 @@
+{
+  "type": "powershell",
+  "command": "Stop-Computer -Force",
+  "description": "Shutdown this computer"
+}
